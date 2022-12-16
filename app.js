@@ -1,16 +1,16 @@
-const puppeteer = require('puppeteer');
-const fs = require("fs");
-const {Telegraf} = require('telegraf');
+let puppeteer = require('puppeteer');
+let fileSystem = require("fs");
+let telegraf = require('telegraf');
 
-const bot = new Telegraf('YOUR_TOKEN');//ADD YOUR TOKEN BOT
-let TESTING_IN_PROCESS = false;
+let bot = new telegraf.Telegraf('5264660015:AAGSs5W-tCBWiNqS0uHiiQKZt1NAbx7kiP4');
+let processStatus = false;
 
-bot.start((ctx) => TESTING_IN_PROCESS === false ? startTest(ctx) : ctx.reply('Тестирование уже запущено, попробуйте позже'));
+bot.start((ctx) => processStatus === false ? startTest(ctx) : ctx.reply('Тестирование уже запущено, попробуйте позже'));
 bot.launch();
 
 //Установка статуса тестирования
 function setStatusProcess(status) {
-    status === true ? TESTING_IN_PROCESS = false : TESTING_IN_PROCESS = true;
+    status === true ? processStatus = false : processStatus = true;
 }
 
 //Функционал с тестированием
@@ -24,10 +24,10 @@ function startTest(ctx) {
     let statusTest = 'ERROR';
     let statusCode = 'ERROR';
 
-    setStatusProcess(TESTING_IN_PROCESS);
+    setStatusProcess(processStatus);
     //Конвертирование из CSV в JSON
     (async () => {
-        const file = fs.readFileSync('file-read/urls.csv', {
+        const file = fileSystem.readFileSync('file-read/urls.csv', {
             encoding: 'utf8'
         });
 
@@ -41,11 +41,11 @@ function startTest(ctx) {
                 };
             });
 
-        fs.writeFileSync('file-read/urls.json', JSON.stringify(newFile, null, 4));
+        fileSystem.writeFileSync('file-read/urls.json', JSON.stringify(newFile, null));
     })();
 
     //Чтение списка сайтов для тестирования
-    const fileContent = fs.readFileSync("file-read/urls.json", "utf8");
+    const fileContent = fileSystem.readFileSync("file-read/urls.json", "utf8");
     let arrayData = JSON.parse(fileContent);
 
     (async () => {
@@ -57,10 +57,10 @@ function startTest(ctx) {
         ctx.reply(`Тестирование началось...`);
         console.log(`Тестирование началось...`);
 
-        for (let data of arrayData) {
+        for (let item of arrayData) {
             try {
                 await page.setCacheEnabled(false);
-                await page.goto(data.url, {
+                await page.goto(item.url, {
                     waitUntil: 'networkidle0'
                 })
                     .then((log) => statusCode = log.status());
@@ -77,30 +77,39 @@ function startTest(ctx) {
                 if (statusCode > 200) {
                     statusTest = 'FAILED';
                     countNEOK++;
-                    dataForBotFailed += `${statusTest} [${statusCode}] [${fullyLoadEvaluate}s], ${data.url}\r\n`;
+                    dataForBotFailed += `${statusTest} [${statusCode}] [${fullyLoadEvaluate}s], ${item.url}\r\n`;
+                    console.log(dataForBotFailed)
                 } else {
                     statusTest = 'OK';
                     countOK++;
-                    dataForBotSuccess += `${statusTest} [${statusCode}] [${fullyLoadEvaluate}s], ${data.url}\r\n`;
+                    dataForBotSuccess += `${statusTest} [${statusCode}] [${fullyLoadEvaluate}s], ${item.url}\r\n`;
+                    console.log(dataForBotSuccess)
                 }
             } catch (error) {
-                dataForBotErrors += `Произошла ошибка:\r\n [${data.url}]\r\n ${error}\r\n`;
+                dataForBotErrors += `Произошла фатальная ошибка:\r\n [${item.url}]\r\n ${error}\r\n`;
                 countErrors++;
+                console.log(dataForBotErrors)
             }
         }
 
         //Процесс передачи сообщений боту
-        // ctx.reply(dataForBotSuccess); //Вывод успещных загрузок страниц
-        ctx.reply(dataForBotFailed)
-            .then(() => ctx.reply(dataForBotErrors))
-            .then(() => ctx.reply(`Тест завершен, OK [${countOK}] | BAD [${countNEOK}] | ERRORS [${countErrors}]`));
-        setStatusProcess(TESTING_IN_PROCESS);
+        ctx.reply(dataForBotSuccess); //Вывод успещных загрузок страниц
+        ctx.reply(dataForBotFailed !== '' ? dataForBotFailed : 'Не успешные запросы отсутствуют')
+            .then(() => {
+                ctx.reply(dataForBotErrors !== '' ? dataForBotErrors : 'Ошибки отсутствуют')
+            })
+            .then(() => {
+                ctx.reply(`Тест завершен, OK [${countOK}] | BAD [${countNEOK}] | ERRORS [${countErrors}]`)
+            })
+        setStatusProcess(processStatus);
 
         return browser
     })()
         .then((browser) => {
             browser.close();
             console.log(`Тестирование завершено!`);
-        });
+        })
+        .catch((error) => ctx.reply("Ошибка кода: ", error)
+        )
 }
 
