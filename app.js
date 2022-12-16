@@ -2,10 +2,11 @@ let puppeteer = require('puppeteer');
 let fileSystem = require("fs");
 let telegraf = require('telegraf');
 
+let timerSeconds = 0;
 let bot = new telegraf.Telegraf('5264660015:AAGSs5W-tCBWiNqS0uHiiQKZt1NAbx7kiP4');
 let processStatus = false;
 
-bot.start((ctx) => processStatus === false ? startTest(ctx) : ctx.reply('Тестирование уже запущено, попробуйте позже'));
+bot.start((ctx) => processStatus === false ? timer(ctx) : ctx.reply('Тестирование уже запущено, попробуйте позже'));
 bot.launch();
 
 //Установка статуса тестирования
@@ -111,5 +112,24 @@ function startTest(ctx) {
         })
         .catch((error) => ctx.reply("Ошибка кода: ", error)
         )
+}
+
+
+
+function timer(ctx) {
+    let context = ctx
+    setInterval(() => {
+        if (timerSeconds === 0 && processStatus === false) {
+            startTest(context)
+            timerSeconds = 43200
+            let intervalTimer = setInterval(() => {
+                --timerSeconds
+                if (timerSeconds === 0) {
+                    clearInterval(intervalTimer)
+                }
+
+            }, 1000)
+        }
+    }, 5000)
 }
 
